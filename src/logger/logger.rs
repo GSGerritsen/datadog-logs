@@ -10,6 +10,19 @@ use flume::{bounded, unbounded, Receiver, Sender};
 use futures::Future;
 use log::{LevelFilter, Log, Metadata, Record};
 use std::{fmt::Display, ops::Drop, thread};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+use opentelemetry::trace::{SpanId, TraceContextExt, TraceId};
+
+fn get_trace_ids() -> (TraceId, SpanId) {
+    let span = tracing::Span::current();
+    let span_context = span.context();
+    let span_context = span_context.span();
+    let span_context = span_context.span_context();
+    let trace_id = span_context.trace_id();
+    let span_id = span_context.span_id();
+    (trace_id, span_id)
+}
+
 
 #[derive(Debug)]
 /// Logger that logs directly to DataDog via HTTP(S)
@@ -156,6 +169,11 @@ impl DataDogLogger {
     ///logger.log("message", DataDogLogLevel::Error);
     ///```
     pub fn log<T: Display>(&self, message: T, level: DataDogLogLevel) {
+
+        let (trace_id, span_id) = get_trace_ids();
+        let trace_id = (trace_id.to_u128() as u64).to_string();
+        let span_id = span_id.to_u64().to_string();
+
         let log = DataDogLog {
             message: message.to_string(),
             ddtags: self.config.tags.clone(),
@@ -163,6 +181,8 @@ impl DataDogLogger {
             host: self.config.hostname.clone().unwrap_or_default(),
             ddsource: self.config.source.clone(),
             level: level.to_string(),
+            trace_id: trace_id,
+            span_id: span_id
         };
 
         if let Some(ref sender) = self.logsender {
@@ -178,7 +198,6 @@ impl DataDogLogger {
             }
         }
     }
-
     /// Initializes blocking DataDogLogger with `log` crate.
     /// # Examples
     ///

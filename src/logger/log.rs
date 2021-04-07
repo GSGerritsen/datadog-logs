@@ -15,4 +15,8 @@ pub struct DataDogLog {
     pub service: String,
     /// Datadog understandable string indicating level
     pub level: String,
+    /// The trace in which this log was generated
+    pub trace_id: String,
+    /// The span in which this log was generated
+    pub span_id: String
 }
