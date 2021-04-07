@@ -11,6 +11,8 @@ pub struct DataDogConfig {
     pub apikey: String,
     /// Service name to add to each log.
     pub service: Option<String>,
+    /// Version to add to each log
+    pub version: Option<String>,
     /// Hostname to add to each log.
     pub hostname: Option<String>,
     /// Source to add to each log.
@@ -45,6 +47,7 @@ impl Default for DataDogConfig {
             tags: None,
             apikey: "".into(),
             service: None,
+            version: None,
             hostname: None,
             http_config: Default::default(),
             tcp_config: Default::default(),

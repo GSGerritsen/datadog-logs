@@ -23,7 +23,6 @@ fn get_trace_ids() -> (TraceId, SpanId) {
     (trace_id, span_id)
 }
 
-
 #[derive(Debug)]
 /// Logger that logs directly to DataDog via HTTP(S)
 pub struct DataDogLogger {
@@ -174,8 +173,18 @@ impl DataDogLogger {
         let trace_id = (trace_id.to_u128() as u64).to_string();
         let span_id = span_id.to_u64().to_string();
 
+        // same format used by fern when logging to stdout
+        let message = format!(
+            "{}[{}][{}][{}] {}",
+            chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+            self.config.service.clone().unwrap_or_default(),
+            self.config.version.clone().unwrap_or_default(),
+            level.to_string(),
+            message
+        );
+
         let log = DataDogLog {
-            message: message.to_string(),
+            message: message,
             ddtags: self.config.tags.clone(),
             service: self.config.service.clone().unwrap_or_default(),
             host: self.config.hostname.clone().unwrap_or_default(),
