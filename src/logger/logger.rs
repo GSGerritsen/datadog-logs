@@ -175,10 +175,9 @@ impl DataDogLogger {
 
         // same format used by fern when logging to stdout
         let message = format!(
-            "{}[{}][{}][{}] {}",
+            "{}[{}][{}] {}",
             chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
             self.config.service.clone().unwrap_or_default(),
-            self.config.version.clone().unwrap_or_default(),
             level.to_string(),
             message
         );
