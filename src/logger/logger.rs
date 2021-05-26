@@ -143,8 +143,10 @@ impl DataDogLogger {
             None => unbounded(),
         };
         let logger_future = nonblocking::logger_future(client, logreceiver, slsender);
+        let mut filter_builder = Builder::from_env("RUST_LOG");
 
         let logger = DataDogLogger {
+            env_filter: filter_builder.build(),
             config,
             logsender: Some(logsender),
             selflogrv: slreceiver,
