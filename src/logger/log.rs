@@ -20,5 +20,5 @@ pub struct DataDogLog {
     pub trace_id: String,
     #[serde(rename = "dd.span_id")]
     /// The span in which this log was generated
-    pub span_id: String
+    pub span_id: String,
 }

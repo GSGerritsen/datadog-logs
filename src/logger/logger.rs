@@ -5,13 +5,14 @@ use super::{level::DataDogLogLevel, log::DataDogLog};
 #[cfg(feature = "nonblocking")]
 use crate::client::AsyncDataDogClient;
 use crate::{client::DataDogClient, config::DataDogConfig, error::DataDogLoggerError};
+use env_logger::filter::{Builder, Filter};
 use flume::{bounded, unbounded, Receiver, Sender};
 #[cfg(feature = "nonblocking")]
 use futures::Future;
 use log::{LevelFilter, Log, Metadata, Record};
+use opentelemetry::trace::{SpanId, TraceContextExt, TraceId};
 use std::{fmt::Display, ops::Drop, thread};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
-use opentelemetry::trace::{SpanId, TraceContextExt, TraceId};
 
 fn get_trace_ids() -> (TraceId, SpanId) {
     let span = tracing::Span::current();
@@ -26,6 +27,7 @@ fn get_trace_ids() -> (TraceId, SpanId) {
 #[derive(Debug)]
 /// Logger that logs directly to DataDog via HTTP(S)
 pub struct DataDogLogger {
+    env_filter: Filter,
     config: DataDogConfig,
     logsender: Option<Sender<DataDogLog>>,
     selflogrv: Option<Receiver<String>>,
@@ -75,7 +77,9 @@ impl DataDogLogger {
         let logger_handle =
             thread::spawn(move || blocking::logger_thread(client, receiver, slsender));
 
+        let mut filter_builder = Builder::from_env("RUST_LOG");
         DataDogLogger {
+            env_filter: filter_builder.build(),
             config,
             logsender: Some(sender),
             selflogrv: slreceiver,
@@ -168,7 +172,6 @@ impl DataDogLogger {
     ///logger.log("message", DataDogLogLevel::Error);
     ///```
     pub fn log<T: Display>(&self, message: T, level: DataDogLogLevel) {
-
         let (trace_id, span_id) = get_trace_ids();
         let trace_id = (trace_id.to_u128() as u64).to_string();
         let span_id = span_id.to_u64().to_string();
@@ -190,7 +193,7 @@ impl DataDogLogger {
             ddsource: self.config.source.clone(),
             level: level.to_string(),
             trace_id: trace_id,
-            span_id: span_id
+            span_id: span_id,
         };
 
         if let Some(ref sender) = self.logsender {
@@ -264,26 +267,28 @@ impl DataDogLogger {
         T: AsyncDataDogClient + Send + 'static,
     {
         let (logger, future) = DataDogLogger::non_blocking_cold(client, config);
+        log::set_max_level(logger.env_filter.filter());
         log::set_boxed_logger(Box::new(logger))?;
-        log::set_max_level(level);
         Ok(future)
     }
 }
 
 impl Log for DataDogLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        self.env_filter.enabled(metadata)
     }
 
     fn log(&self, record: &Record) {
-        let level = match record.level() {
-            log::Level::Error => DataDogLogLevel::Error,
-            log::Level::Warn => DataDogLogLevel::Warning,
-            log::Level::Info => DataDogLogLevel::Informational,
-            log::Level::Debug | log::Level::Trace => DataDogLogLevel::Debug,
-        };
+        if self.env_filter.matches(record) {
+            let level = match record.level() {
+                log::Level::Error => DataDogLogLevel::Error,
+                log::Level::Warn => DataDogLogLevel::Warning,
+                log::Level::Info => DataDogLogLevel::Informational,
+                log::Level::Debug | log::Level::Trace => DataDogLogLevel::Debug,
+            };
 
-        &self.log(format!("{}", record.args()), level);
+            &self.log(format!("{}", record.args()), level);
+        }
     }
 
     fn flush(&self) {}
